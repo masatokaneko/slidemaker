@@ -1,120 +1,88 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useSlideStore } from "@/store/slide-store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Sparkles, Lightbulb, TrendingUp, CheckCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Progress } from "@/components/ui/progress"
+import { Monitoring } from "@/lib/monitoring"
 
-interface AIEnhancementPanelProps {
-  yamlData: string
-  tags: string[]
-  onEnhancedData: (data: string) => void
-}
+const monitoring = Monitoring.getInstance()
 
-export function AIEnhancementPanel({ yamlData, tags, onEnhancedData }: AIEnhancementPanelProps) {
+export function AiEnhancementPanel() {
+  const { slides, currentSlideIndex, updateSlide } = useSlideStore()
   const [isEnhancing, setIsEnhancing] = useState(false)
-  const [recommendations, setRecommendations] = useState<string[]>([])
-  const [enhancementResult, setEnhancementResult] = useState<string>("")
+  const [enhancementPrompt, setEnhancementPrompt] = useState("")
+
+  const currentSlide = slides[currentSlideIndex]
 
   const handleEnhance = async () => {
-    if (!yamlData.trim()) return
+    if (!enhancementPrompt.trim()) return
 
     setIsEnhancing(true)
     try {
-      const response = await fetch("/api/enhance-with-ai", {
+      const response = await fetch("/api/enhance-slide", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          yamlData,
-          tags,
-          action: "enhance",
+          slideId: currentSlide.id,
+          prompt: enhancementPrompt,
         }),
       })
 
-      const result = await response.json()
-      if (result.enhancedData) {
-        setEnhancementResult(result.enhancedData)
-        onEnhancedData(result.enhancedData)
+      if (!response.ok) {
+        throw new Error("スライドの強化に失敗しました")
       }
+
+      const result = await response.json()
+      updateSlide(currentSlide.id, result.enhancedContent)
+
+      monitoring.trackMetric('slide_enhancement_success', {
+        slideId: currentSlide.id,
+        promptLength: enhancementPrompt.length,
+      })
     } catch (error) {
-      console.error("Enhancement failed:", error)
+      monitoring.trackError('slide_enhancement_error', error)
+      console.error("Error enhancing slide:", error)
     } finally {
       setIsEnhancing(false)
-    }
-  }
-
-  const handleGetRecommendations = async () => {
-    try {
-      const response = await fetch("/api/enhance-with-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: yamlData,
-          slideType: "general",
-          action: "recommend",
-        }),
-      })
-
-      const result = await response.json()
-      if (result.recommendations) {
-        setRecommendations(result.recommendations)
-      }
-    } catch (error) {
-      console.error("Failed to get recommendations:", error)
+      setEnhancementPrompt("")
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-blue-500" />
-          AI強化機能
-        </CardTitle>
-        <CardDescription>GPT-4を使用してBCGレベルの品質にスライドを改善します</CardDescription>
+        <CardTitle>AI強化</CardTitle>
+        <CardDescription>
+          現在のスライドをAIを使って強化します
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="outline">
-              {tag}
-            </Badge>
-          ))}
-        </div>
+        <Textarea
+          placeholder="例: 「このスライドをより簡潔に」「グラフを追加して」「デザインをモダンに」"
+          value={enhancementPrompt}
+          onChange={(e) => setEnhancementPrompt(e.target.value)}
+          disabled={isEnhancing}
+          className="min-h-[100px]"
+        />
 
-        <div className="grid grid-cols-2 gap-2">
-          <Button onClick={handleEnhance} disabled={isEnhancing || !yamlData.trim()} className="w-full">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            {isEnhancing ? "強化中..." : "AI強化"}
-          </Button>
-          <Button variant="outline" onClick={handleGetRecommendations} className="w-full">
-            <Lightbulb className="h-4 w-4 mr-2" />
-            改善提案
-          </Button>
-        </div>
-
-        {enhancementResult && (
-          <Alert>
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>AIによる強化が完了しました。構造化データが更新されました。</AlertDescription>
-          </Alert>
-        )}
-
-        {recommendations.length > 0 && (
+        {isEnhancing && (
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">改善提案:</h4>
-            <ul className="space-y-1">
-              {recommendations.map((rec, index) => (
-                <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="text-blue-500 mt-1">•</span>
-                  {rec}
-                </li>
-              ))}
-            </ul>
+            <Progress value={100} className="h-2" />
+            <p className="text-sm text-muted-foreground">AIがスライドを強化しています...</p>
           </div>
         )}
+
+        <div className="flex justify-end">
+          <Button
+            onClick={handleEnhance}
+            disabled={isEnhancing || !enhancementPrompt.trim()}
+          >
+            {isEnhancing ? "強化中..." : "スライドを強化"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
