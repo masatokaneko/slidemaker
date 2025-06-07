@@ -9,6 +9,9 @@ SlideMakerは、自然言語からPowerPointプレゼンテーションを生成
 - チャートの自動生成
 - PDFからのデザインパターン抽出
 - カスタマイズ可能なレイアウト
+- パフォーマンス最適化（キャッシュ）
+- セキュリティ機能
+- モニタリングとロギング
 
 ## 技術スタック
 
@@ -18,6 +21,8 @@ SlideMakerは、自然言語からPowerPointプレゼンテーションを生成
 - Chart.js
 - PptxGenJS
 - Tailwind CSS
+- Redis（キャッシュ）
+- ioredis（Redisクライアント）
 
 ## セットアップ
 
@@ -37,6 +42,7 @@ pnpm install
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/slidemaker"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+REDIS_URL="redis://localhost:6379"
 ```
 
 4. データベースのセットアップ
@@ -45,7 +51,12 @@ pnpm prisma generate
 pnpm prisma migrate dev
 ```
 
-5. 開発サーバーの起動
+5. Redisの起動
+```bash
+docker run -d -p 6379:6379 redis
+```
+
+6. 開発サーバーの起動
 ```bash
 pnpm dev
 ```
@@ -67,6 +78,29 @@ pnpm dev
    - 自動的にデザインパターンを抽出
    - 抽出されたパターンをプレゼンテーションに適用
 
+## セキュリティ機能
+
+- CORS設定
+- レート制限
+- ファイルアップロードの検証
+- セキュリティヘッダー
+- XSS対策
+- CSRF対策
+
+## パフォーマンス最適化
+
+- Redisキャッシュ
+- 画像の最適化
+- チャートのキャッシュ
+- データベースのインデックス
+
+## モニタリング
+
+- エラーログ
+- パフォーマンスメトリクス
+- ユーザー行動分析
+- システムリソース監視
+
 ## テスト
 
 ```bash
@@ -79,6 +113,13 @@ pnpm test:watch
 # カバレッジレポートの生成
 pnpm test:coverage
 ```
+
+## CI/CD
+
+- GitHub Actionsによる自動テスト
+- 自動デプロイメント
+- コード品質チェック
+- セキュリティスキャン
 
 ## ライセンス
 

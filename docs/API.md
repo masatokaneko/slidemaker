@@ -4,19 +4,17 @@
 
 ### プレゼンテーション生成
 
-#### POST /api/generate-presentation
-
-自然言語からPowerPointプレゼンテーションを生成します。
+#### POST /api/generate
+プレゼンテーションを生成します。
 
 **リクエスト**
 ```json
 {
-  "content": "プレゼンテーションの内容を自然言語で記述",
-  "template": "BCG",
-  "options": {
-    "includeCharts": true,
-    "includeImages": true,
-    "style": "modern"
+  "content": "プレゼンテーションの内容",
+  "template": "bcg",
+  "style": {
+    "theme": "light",
+    "font": "Arial"
   }
 }
 ```
@@ -26,8 +24,13 @@
 {
   "success": true,
   "data": {
-    "fileUrl": "https://example.com/presentations/123.pptx",
-    "previewUrl": "https://example.com/previews/123.png"
+    "fileUrl": "/api/download/123456",
+    "slides": [
+      {
+        "type": "title",
+        "content": "タイトル"
+      }
+    ]
   }
 }
 ```
@@ -35,20 +38,12 @@
 ### PDF分析
 
 #### POST /api/analyze-pdf
-
 PDFファイルからデザインパターンを抽出します。
 
 **リクエスト**
-```json
-{
-  "file": "PDFファイル（multipart/form-data）",
-  "options": {
-    "extractColors": true,
-    "extractLayouts": true,
-    "extractCharts": true
-  }
-}
-```
+- Content-Type: multipart/form-data
+- ファイルサイズ制限: 10MB
+- 許可されるMIMEタイプ: application/pdf
 
 **レスポンス**
 ```json
@@ -57,53 +52,89 @@ PDFファイルからデザインパターンを抽出します。
   "data": {
     "patterns": [
       {
-        "type": "color",
-        "value": "#1F2937",
-        "frequency": 0.3
-      },
-      {
         "type": "layout",
-        "value": "title-and-content",
-        "frequency": 0.5
+        "description": "パターンの説明",
+        "confidence": 0.95
       }
     ]
   }
 }
 ```
 
-### チャート生成
+### キャッシュ管理
 
-#### POST /api/generate-chart
-
-チャートを生成します。
-
-**リクエスト**
-```json
-{
-  "type": "bar",
-  "data": {
-    "labels": ["A", "B", "C"],
-    "datasets": [
-      {
-        "label": "データ1",
-        "data": [1, 2, 3]
-      }
-    ]
-  },
-  "options": {
-    "width": 800,
-    "height": 400,
-    "colors": ["#FF0000", "#00FF00", "#0000FF"]
-  }
-}
-```
+#### GET /api/cache/:key
+キャッシュされたデータを取得します。
 
 **レスポンス**
 ```json
 {
   "success": true,
   "data": {
-    "chartUrl": "https://example.com/charts/123.png"
+    "value": "キャッシュされた値",
+    "expiresAt": "2024-03-20T12:00:00Z"
+  }
+}
+```
+
+#### DELETE /api/cache/:key
+キャッシュされたデータを削除します。
+
+**レスポンス**
+```json
+{
+  "success": true
+}
+```
+
+### モニタリング
+
+#### GET /api/monitoring/errors
+エラーログを取得します。
+
+**クエリパラメータ**
+- startDate: 開始日時（ISO 8601形式）
+- endDate: 終了日時（ISO 8601形式）
+- level: エラーレベル（error, warning, info）
+
+**レスポンス**
+```json
+{
+  "success": true,
+  "data": {
+    "errors": [
+      {
+        "timestamp": "2024-03-20T12:00:00Z",
+        "level": "error",
+        "message": "エラーメッセージ",
+        "stack": "エラースタック"
+      }
+    ]
+  }
+}
+```
+
+#### GET /api/monitoring/metrics
+パフォーマンスメトリクスを取得します。
+
+**クエリパラメータ**
+- startDate: 開始日時（ISO 8601形式）
+- endDate: 終了日時（ISO 8601形式）
+- type: メトリクスタイプ（performance, user, system）
+
+**レスポンス**
+```json
+{
+  "success": true,
+  "data": {
+    "metrics": [
+      {
+        "timestamp": "2024-03-20T12:00:00Z",
+        "type": "performance",
+        "name": "responseTime",
+        "value": 150
+      }
+    ]
   }
 }
 ```
@@ -112,43 +143,24 @@ PDFファイルからデザインパターンを抽出します。
 
 | コード | 説明 |
 |--------|------|
-| INVALID_YAML_DATA | YAMLデータが無効です |
-| EMPTY_SLIDES | スライドデータが空です |
-| INVALID_SLIDE_TYPE | 無効なスライドタイプです |
-| INVALID_CHART_DATA | チャートデータが無効です |
-| TEMPLATE_APPLICATION_ERROR | テンプレートの適用に失敗しました |
-| FILE_PROCESSING_ERROR | ファイルの処理に失敗しました |
-
-## 認証
-
-APIリクエストには認証が必要です。認証トークンを`Authorization`ヘッダーに含めてください：
-
-```
-Authorization: Bearer <your-token>
-```
+| FILE_PROCESSING_ERROR | ファイル処理エラー |
+| DATABASE_ERROR | データベースエラー |
+| CACHE_ERROR | キャッシュエラー |
+| VALIDATION_ERROR | バリデーションエラー |
+| RATE_LIMIT_ERROR | レート制限エラー |
+| SECURITY_ERROR | セキュリティエラー |
 
 ## レート制限
 
-- 1分あたり60リクエスト
-- 1時間あたり1000リクエスト
-- 1日あたり10000リクエスト
+- リクエスト制限: 60回/分
+- ファイルアップロード: 10MB/ファイル
+- キャッシュTTL: 1時間（デフォルト）
 
-## レスポンス形式
+## セキュリティ
 
-すべてのAPIレスポンスは以下の形式で返されます：
-
-```json
-{
-  "success": true|false,
-  "data": {
-    // レスポンスデータ
-  },
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "エラーメッセージ",
-    "details": {
-      // 追加のエラー情報
-    }
-  }
-}
-``` 
+- CORS設定
+- レート制限
+- ファイルアップロードの検証
+- セキュリティヘッダー
+- XSS対策
+- CSRF対策 

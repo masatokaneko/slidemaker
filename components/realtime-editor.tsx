@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,6 +25,9 @@ import {
   Underline,
   Plus,
 } from "lucide-react"
+import { useChat } from 'ai/react'
+import { useDispatch } from 'react-redux'
+import { NLPEditResponse } from '@/types/nlp-edit'
 
 interface SlideElement {
   id: string
@@ -45,7 +48,36 @@ interface Slide {
   layout: string
 }
 
-export function RealtimeEditor() {
+interface RealtimeEditorProps {
+  slideId: string
+  initialYaml: string
+}
+
+export function RealtimeEditor({ slideId, initialYaml }: RealtimeEditorProps) {
+  const dispatch = useDispatch()
+  const [yaml, setYaml] = useState(initialYaml)
+  const [isEditing, setIsEditing] = useState(false)
+
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/nlp-edit',
+    body: {
+      slideId,
+    },
+    onResponse: async (response) => {
+      const data = await response.json() as NLPEditResponse
+      if (data.success && data.data) {
+        setYaml(data.data.updatedSlideYaml)
+        dispatch({
+          type: 'APPLY_YAML',
+          payload: {
+            slideId,
+            yaml: data.data.updatedSlideYaml,
+          },
+        })
+      }
+    },
+  })
+
   const [slides, setSlides] = useState<Slide[]>([
     {
       id: "slide-1",
@@ -240,231 +272,55 @@ export function RealtimeEditor() {
   const selectedElementData = selectedElement ? currentSlide.elements.find((el) => el.id === selectedElement) : null
 
   return (
-    <div className="h-screen flex">
-      {/* ツールバー */}
-      <div className="w-64 border-r bg-background p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={undo} disabled={historyIndex === 0}>
-            <Undo className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={redo} disabled={historyIndex === history.length - 1}>
-            <Redo className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline">
-            <Save className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant={isPreviewMode ? "default" : "outline"}
-            onClick={() => setIsPreviewMode(!isPreviewMode)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <Separator />
-
-        <div>
-          <Label className="text-sm font-medium">要素を追加</Label>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <Button size="sm" variant="outline" onClick={() => addElement("text")}>
-              <Type className="h-4 w-4 mr-1" />
-              テキスト
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => addElement("image")}>
-              <ImageIcon className="h-4 w-4 mr-1" />
-              画像
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => addElement("chart")}>
-              <BarChart3 className="h-4 w-4 mr-1" />
-              チャート
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => addElement("shape")}>
-              <Grid className="h-4 w-4 mr-1" />
-              図形
-            </Button>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* プロパティパネル */}
-        {selectedElementData && (
-          <div className="space-y-4">
-            <Label className="text-sm font-medium">プロパティ</Label>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">X</Label>
-                <Input
-                  type="number"
-                  value={selectedElementData.x}
-                  onChange={(e) => updateElement(selectedElement!, { x: Number(e.target.value) })}
-                  className="h-8"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Y</Label>
-                <Input
-                  type="number"
-                  value={selectedElementData.y}
-                  onChange={(e) => updateElement(selectedElement!, { y: Number(e.target.value) })}
-                  className="h-8"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">幅</Label>
-                <Input
-                  type="number"
-                  value={selectedElementData.width}
-                  onChange={(e) => updateElement(selectedElement!, { width: Number(e.target.value) })}
-                  className="h-8"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">高さ</Label>
-                <Input
-                  type="number"
-                  value={selectedElementData.height}
-                  onChange={(e) => updateElement(selectedElement!, { height: Number(e.target.value) })}
-                  className="h-8"
-                />
-              </div>
-            </div>
-
-            {selectedElementData.type === "text" && (
-              <div className="space-y-2">
-                <Label className="text-xs">テキスト</Label>
-                <Textarea
-                  value={selectedElementData.content.text}
-                  onChange={(e) =>
-                    updateElement(selectedElement!, {
-                      content: { ...selectedElementData.content, text: e.target.value },
-                    })
-                  }
-                  className="h-20"
-                />
-
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline">
-                    <Bold className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Italic className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Underline className="h-3 w-3" />
-                  </Button>
-                </div>
-
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline">
-                    <AlignLeft className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <AlignCenter className="h-3 w-3" />
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <AlignRight className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+    <div className="flex h-full">
+      {/* プレビュー */}
+      <div className="flex-1 p-4">
+        <iframe
+          src={`/api/preview/${slideId}`}
+          className="w-full h-full border-0"
+          title="Slide Preview"
+        />
       </div>
 
-      {/* メインエディター */}
-      <div className="flex-1 flex flex-col">
-        {/* スライド一覧 */}
-        <div className="h-20 border-b bg-muted/30 p-2 flex gap-2 overflow-x-auto">
-          {slides.map((slide, index) => (
+      {/* チャットパネル */}
+      <div className="w-80 border-l border-gray-200 p-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          {messages.map((message) => (
             <div
-              key={slide.id}
-              className={`flex-shrink-0 w-24 h-16 border rounded cursor-pointer ${
-                index === currentSlideIndex ? "border-primary bg-primary/10" : "border-border bg-background"
+              key={message.id}
+              className={`mb-4 ${
+                message.role === 'user' ? 'text-right' : 'text-left'
               }`}
-              onClick={() => setCurrentSlideIndex(index)}
             >
-              <div className="w-full h-full flex items-center justify-center text-xs">{index + 1}</div>
+              <div
+                className={`inline-block p-2 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100'
+                }`}
+              >
+                {message.content}
+              </div>
             </div>
           ))}
-          <Button size="sm" variant="outline" className="flex-shrink-0 w-24 h-16" onClick={() => {}}>
-            <Plus className="h-4 w-4" />
-          </Button>
         </div>
 
-        {/* キャンバス */}
-        <div className="flex-1 bg-muted/20 p-8 overflow-auto">
-          <div className="mx-auto" style={{ width: "800px", height: "600px" }}>
-            <div
-              ref={canvasRef}
-              className="relative bg-white shadow-lg"
-              style={{ width: "800px", height: "600px" }}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
+        <form onSubmit={handleSubmit} className="mt-4">
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={handleInputChange}
+              placeholder="スライドの編集指示を入力..."
+              className="flex-1 p-2 border rounded"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
-              {currentSlide.elements.map((element) => (
-                <div
-                  key={element.id}
-                  className={`absolute border-2 cursor-move ${
-                    selectedElement === element.id ? "border-primary" : "border-transparent"
-                  } hover:border-primary/50`}
-                  style={{
-                    left: element.x,
-                    top: element.y,
-                    width: element.width,
-                    height: element.height,
-                  }}
-                  onMouseDown={(e) => handleMouseDown(e, element.id)}
-                  onClick={() => setSelectedElement(element.id)}
-                >
-                  {element.type === "text" && (
-                    <div
-                      className="w-full h-full flex items-center justify-center p-2"
-                      style={{
-                        fontSize: element.style.fontSize,
-                        color: element.style.color,
-                        fontWeight: element.style.fontWeight,
-                      }}
-                    >
-                      {element.content.text}
-                    </div>
-                  )}
-
-                  {element.type === "image" && (
-                    <img
-                      src={element.content.src || "/placeholder.svg"}
-                      alt="Element"
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-
-                  {element.type === "chart" && (
-                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                      <BarChart3 className="h-8 w-8 text-gray-400" />
-                    </div>
-                  )}
-
-                  {element.type === "shape" && (
-                    <div className="w-full h-full" style={{ backgroundColor: element.content.fill }} />
-                  )}
-
-                  {selectedElement === element.id && (
-                    <>
-                      {/* リサイズハンドル */}
-                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-primary border border-white cursor-se-resize" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary border border-white cursor-ne-resize" />
-                      <div className="absolute -top-1 -left-1 w-3 h-3 bg-primary border border-white cursor-nw-resize" />
-                      <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-primary border border-white cursor-sw-resize" />
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+              送信
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

@@ -163,3 +163,16 @@ model DesignPattern {
   pdfHash     String    // 同一 PDF の重複登録防止
   @@unique([pdfHash])
 }
+
+model DesignComponent {
+  id          String   @id @default(cuid())
+  type        String
+  json        Json
+  name        String
+  sourcePdfId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([sourcePdfId])
+}

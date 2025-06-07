@@ -4,6 +4,19 @@ import { PDFDocument } from "pdf-lib"
 import ColorThief from "colorthief"
 import fetch from "node-fetch"
 import crypto from "crypto"
+import { CustomError, ErrorCode } from './error-handler'
+import { PrismaClient } from '@prisma/client'
+import { Monitoring } from './monitoring'
+
+const prisma = new PrismaClient()
+const monitoring = Monitoring.getInstance()
+
+interface DesignComponent {
+  type: string
+  json: any
+  name: string
+  sourcePdfId?: string
+}
 
 /**
  * PDFファイルを分析してデザインパターンを抽出する
@@ -258,3 +271,11 @@ export async function analyzePdfToDesignPatternDTO(
   }
   return patterns
 }
+
+export async function extractDesignComponents(pdfBuffer: Buffer, pdfId: string): Promise<DesignComponent[]> {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBuffer)
+    const components: DesignComponent[] = []
+
+    // 各ページを処理
+    for (let i = 0; i < pdfDoc.getPageCount()
