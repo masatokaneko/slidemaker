@@ -204,3 +204,13 @@ model Category {
 
   @@unique([name])
 }
+
+model Job {
+  id        String   @id @default(cuid())
+  type      String   // "pdf_analysis" | "slide_generation"
+  status    String   // "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED"
+  result    Json?    // 処理結果
+  error     String?  // エラーメッセージ
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
