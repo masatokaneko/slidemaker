@@ -11,6 +11,7 @@ export interface DesignPattern {
   sourceFile: string
   extractedAt: string
   confidence: number
+  layoutPatterns: LayoutPattern[]
 }
 
 export interface LayoutAnalysis {
@@ -60,6 +61,19 @@ export interface ElementAnalysis {
   hasCharts: boolean
   hasImages: boolean
   hasIcons: boolean
+}
+
+export interface LayoutPattern {
+  type: 'text' | 'image';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  fontName?: string;
+  fontSize?: number;
+  color?: string;
+  imageUrl?: string;
 }
 
 // PDFから抽出したデザインパターン情報のDTO

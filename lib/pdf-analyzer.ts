@@ -1,4 +1,4 @@
-import type { DesignPattern, LayoutAnalysis, ColorPalette } from "@/types/design-patterns"
+import type { DesignPattern, LayoutAnalysis, ColorPalette, LayoutPattern } from "@/types/design-patterns"
 import type { DesignPatternDTO } from "@/types/design-patterns"
 import { PDFDocument } from "pdf-lib"
 import ColorThief from "colorthief"
@@ -53,6 +53,32 @@ export async function analyzePdfDesignPatterns(
     // チャート・図表分析
     const charts = await analyzeCharts(page)
 
+    // レイアウトパターン抽出（仮実装: regionsから生成）
+    const layoutPatterns: LayoutPattern[] = []
+    if (layout && layout.regions) {
+      for (const region of layout.regions) {
+        layoutPatterns.push({
+          type: region.type === 'header' || region.type === 'content' ? 'text' : 'image',
+          x: region.bounds.x,
+          y: region.bounds.y,
+          w: region.bounds.width,
+          h: region.bounds.height,
+          text: region.type === 'header' ? 'ヘッダー' : region.type === 'content' ? '本文' : undefined,
+        })
+      }
+    }
+    // 画像やチャートのバウンディングボックスも追加（仮実装）
+    if (charts && charts.detected && charts.position) {
+      layoutPatterns.push({
+        type: 'image',
+        x: charts.position.x,
+        y: charts.position.y,
+        w: charts.position.width,
+        h: charts.position.height,
+        imageUrl: '', // 実際の画像URLがあればここに
+      })
+    }
+
     // デザインパターンを分類
     const pattern = classifyDesignPattern({
       layout,
@@ -61,6 +87,7 @@ export async function analyzePdfDesignPatterns(
       charts,
       pageNumber: i + 1,
       sourceFile: filename,
+      layoutPatterns, // 追加
     })
 
     if (pattern) {
@@ -173,22 +200,22 @@ async function analyzeCharts(pageBuffer: Buffer): Promise<any> {
  * 分析結果からデザインパターンを分類
  */
 function classifyDesignPattern(analysis: any): DesignPattern | null {
-  const { layout, colors, textElements, charts } = analysis
+  const { layout, colors, textElements, charts, sourceFile, layoutPatterns } = analysis
 
   // パターンの分類ロジック
   let patternType = "content"
   const tags = ["ビジネス"]
 
-  if (charts.detected) {
+  if (charts && charts.detected) {
     patternType = "chart"
     tags.push("データ分析")
   }
 
-  if (layout.gridStructure.columns > 1) {
+  if (layout && layout.gridStructure && layout.gridStructure.columns > 1) {
     tags.push("比較")
   }
 
-  if (layout.regions.length > 3) {
+  if (layout && layout.regions && layout.regions.length > 3) {
     tags.push("複雑")
   }
 
@@ -201,14 +228,15 @@ function classifyDesignPattern(analysis: any): DesignPattern | null {
     colors: colors,
     typography: textElements,
     elements: {
-      hasCharts: charts.detected,
+      hasCharts: charts && charts.detected,
       hasImages: false, // 画像検出ロジックを追加
       hasIcons: false, // アイコン検出ロジックを追加
     },
-    thumbnail: "", // 生成されたサムネイル画像のURL
-    sourceFile: analysis.sourceFile,
+    thumbnail: "",
+    sourceFile: sourceFile,
     extractedAt: new Date().toISOString(),
     confidence: 0.85,
+    layoutPatterns: layoutPatterns || [],
   }
 }
 
