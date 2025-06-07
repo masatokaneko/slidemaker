@@ -152,3 +152,14 @@ model File {
 
   @@map("files")
 }
+
+model DesignPattern {
+  id          String   @id @default(cuid())
+  name        String
+  layoutJson  Json      // element bbox, zIndex
+  paletteJson Json      // color palette
+  fontFamily  String
+  createdAt   DateTime @default(now())
+  pdfHash     String    // 同一 PDF の重複登録防止
+  @@unique([pdfHash])
+}

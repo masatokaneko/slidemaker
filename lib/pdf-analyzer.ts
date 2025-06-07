@@ -1,4 +1,9 @@
 import type { DesignPattern, LayoutAnalysis, ColorPalette } from "@/types/design-patterns"
+import type { DesignPatternDTO } from "@/types/design-patterns"
+import { PDFDocument } from "pdf-lib"
+import ColorThief from "colorthief"
+import fetch from "node-fetch"
+import crypto from "crypto"
 
 /**
  * PDFファイルを分析してデザインパターンを抽出する
@@ -192,4 +197,64 @@ function classifyDesignPattern(analysis: any): DesignPattern | null {
     extractedAt: new Date().toISOString(),
     confidence: 0.85,
   }
+}
+
+/**
+ * PDFファイルを分析してデザインパターンDTOを抽出する
+ */
+export async function analyzePdfToDesignPatternDTO(
+  buffer: Buffer,
+  filename: string
+): Promise<DesignPatternDTO[]> {
+  // PDFを読み込み
+  const pdfDoc = await PDFDocument.load(buffer)
+  const pageCount = pdfDoc.getPageCount()
+  const patterns: DesignPatternDTO[] = []
+
+  for (let i = 0; i < pageCount; i++) {
+    const page = pdfDoc.getPage(i)
+    // ページ画像化（仮: 実際はpdf2image等で画像化する必要あり）
+    // ここではbufferをそのまま使う例
+    const pageBuffer = buffer
+
+    // 主要色抽出
+    let palette: string[] = []
+    try {
+      palette = await ColorThief.getPalette(pageBuffer, 5)
+      palette = palette.map((rgb: number[]) =>
+        `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`
+      )
+    } catch (e) {
+      palette = ["#1f2937", "#3b82f6", "#ef4444", "#ffffff", "#111827"]
+    }
+
+    // 要素検出（Python Lambda API呼び出し）
+    let layoutJson = { elements: [] as any[] }
+    let fontFamily = "Arial"
+    try {
+      const apiRes = await fetch("https://your-lambda-endpoint/layout", {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: pageBuffer,
+      })
+      const apiJson = await apiRes.json()
+      layoutJson = apiJson.layoutJson
+      fontFamily = apiJson.fontFamily || fontFamily
+    } catch (e) {
+      // fallback
+      layoutJson = { elements: [] }
+    }
+
+    // PDFハッシュ
+    const pdfHash = crypto.createHash("sha256").update(buffer).digest("hex")
+
+    patterns.push({
+      name: `${filename}_page${i + 1}`,
+      layoutJson,
+      paletteJson: { colors: palette },
+      fontFamily,
+      pdfHash,
+    })
+  }
+  return patterns
 }

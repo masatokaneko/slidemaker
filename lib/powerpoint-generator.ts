@@ -109,24 +109,36 @@ async function generateChartSlide(slide: any, content: any, tags: string[]) {
 
   // チャートデータの処理
   if (content.data && content.data.datasets) {
-    const chartImage = await generateChart({
-      type: content.chart_type || content.chartType || "bar",
-      data: content.data,
-      options: {
-        bcgStyle: tags.includes("ビジネス"),
-        width: 800,
-        height: 400,
-      },
-    })
+    const chartType = content.chart_type || content.chartType || "bar"
+    const chartData = processChartData(content.data)
 
-    // チャート画像を追加
-    slide.addImage({
-      data: chartImage,
-      x: 1,
-      y: 1.5,
-      w: 8,
-      h: 4.5,
-    })
+    try {
+      slide.addChart(chartType, chartData, {
+        x: 1,
+        y: 1.5,
+        w: 8,
+        h: 4.5,
+        showTitle: false,
+        showLegend: true,
+        legendPos: "b",
+        chartColors: ["3B82F6", "10B981", "F59E0B", "EF4444", "8B5CF6"],
+      })
+    } catch (error) {
+      console.error("Error generating chart:", error)
+      // エラー時のフォールバック
+      slide.addText("チャートの生成に失敗しました", {
+        x: 1,
+        y: 3,
+        w: 8,
+        h: 2,
+        fontSize: 18,
+        fontFace: "Arial",
+        color: "6B7280",
+        align: "center",
+        valign: "middle",
+        fill: "F3F4F6",
+      })
+    }
   }
 
   // データソース注記
@@ -140,6 +152,30 @@ async function generateChartSlide(slide: any, content: any, tags: string[]) {
     color: "9CA3AF",
     italic: true,
   })
+}
+
+function processChartData(data: any): any[] {
+  const result = []
+
+  if (data.labels && data.datasets) {
+    // ヘッダー行の追加
+    const header = ["Category"]
+    data.datasets.forEach((dataset: any) => {
+      header.push(dataset.label || `Series ${header.length}`)
+    })
+    result.push(header)
+
+    // データ行の追加
+    data.labels.forEach((label: string, index: number) => {
+      const row = [label]
+      data.datasets.forEach((dataset: any) => {
+        row.push(dataset.data[index] || 0)
+      })
+      result.push(row)
+    })
+  }
+
+  return result
 }
 
 async function generateComparisonSlide(slide: any, content: any) {

@@ -61,3 +61,20 @@ export interface ElementAnalysis {
   hasImages: boolean
   hasIcons: boolean
 }
+
+// PDFから抽出したデザインパターン情報のDTO
+export interface DesignPatternDTO {
+  name: string;
+  layoutJson: {
+    elements: Array<{
+      bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+      zIndex: number;
+      type: string;
+    }>;
+  };
+  paletteJson: {
+    colors: string[]; // HEX形式
+  };
+  fontFamily: string;
+  pdfHash: string;
+}
