@@ -172,7 +172,35 @@ model DesignComponent {
   sourcePdfId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  versions    ComponentVersion[]
+  category    Category? @relation(fields: [categoryId], references: [id])
+  categoryId  String?
 
   @@index([type])
   @@index([sourcePdfId])
+  @@index([categoryId])
+}
+
+model ComponentVersion {
+  id          String   @id @default(cuid())
+  component   DesignComponent @relation(fields: [componentId], references: [id])
+  componentId String
+  version     Int
+  json        Json
+  createdAt   DateTime @default(now())
+  createdBy   String
+
+  @@unique([componentId, version])
+  @@index([componentId])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  components  DesignComponent[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([name])
 }
