@@ -1,19 +1,29 @@
 import PptxGenJS from "pptxgenjs"
 import { generateChart } from "@/lib/chart-generator"
 import { applyBCGTemplate } from "@/lib/bcg-templates"
+import { CustomError, ErrorCode, handleError } from "@/lib/error-handler"
 import yaml from "js-yaml"
 
 export async function generatePowerPointFile(yamlData: string, tags: string[]): Promise<Buffer> {
   const pptx = new PptxGenJS()
 
-  // BCGスタイルのマスターテンプレートを適用
-  applyBCGTemplate(pptx, tags)
-
   try {
+    // BCGスタイルのマスターテンプレートを適用
+    applyBCGTemplate(pptx, tags)
+
+    // YAMLデータの解析
     const data = yaml.load(yamlData) as any
 
+    if (!data) {
+      throw new CustomError(ErrorCode.INVALID_YAML, "YAMLデータが空です")
+    }
+
     if (!data.slides || !Array.isArray(data.slides)) {
-      throw new Error("Invalid slide data structure")
+      throw new CustomError(ErrorCode.VALIDATION_ERROR, "無効なスライドデータ構造です。slides配列が必要です")
+    }
+
+    if (data.slides.length === 0) {
+      throw new CustomError(ErrorCode.VALIDATION_ERROR, "スライドが1枚も含まれていません")
     }
 
     // 各スライドを生成
@@ -23,40 +33,63 @@ export async function generatePowerPointFile(yamlData: string, tags: string[]): 
 
     // PowerPointファイルを生成
     const pptxBuffer = (await pptx.write({ outputType: "nodebuffer" })) as Buffer
+
+    if (!pptxBuffer || pptxBuffer.length === 0) {
+      throw new CustomError(ErrorCode.POWERPOINT_GENERATION_ERROR, "PowerPointファイルの生成に失敗しました")
+    }
+
     return pptxBuffer
   } catch (error) {
-    console.error("Error parsing YAML or generating slides:", error)
-    throw new Error("Failed to generate PowerPoint presentation")
+    throw handleError(error)
   }
 }
 
 async function generateSlide(pptx: PptxGenJS, slideData: any, tags: string[]) {
-  const slide = pptx.addSlide()
+  try {
+    const slide = pptx.addSlide()
 
-  switch (slideData.type) {
-    case "title":
-      await generateTitleSlide(slide, slideData.content)
-      break
-    case "chart":
-      await generateChartSlide(slide, slideData.content, tags)
-      break
-    case "comparison":
-      await generateComparisonSlide(slide, slideData.content)
-      break
-    case "strategy":
-      await generateStrategySlide(slide, slideData.content)
-      break
-    case "content":
-      await generateContentSlide(slide, slideData.content)
-      break
-    default:
-      await generateContentSlide(slide, slideData.content)
+    if (!slideData.type) {
+      throw new CustomError(ErrorCode.VALIDATION_ERROR, "スライドタイプが指定されていません")
+    }
+
+    if (!slideData.content) {
+      throw new CustomError(ErrorCode.VALIDATION_ERROR, "スライドコンテンツが指定されていません")
+    }
+
+    switch (slideData.type) {
+      case "title":
+        await generateTitleSlide(slide, slideData.content)
+        break
+      case "chart":
+        await generateChartSlide(slide, slideData.content, tags)
+        break
+      case "comparison":
+        await generateComparisonSlide(slide, slideData.content)
+        break
+      case "strategy":
+        await generateStrategySlide(slide, slideData.content)
+        break
+      case "content":
+        await generateContentSlide(slide, slideData.content)
+        break
+      default:
+        throw new CustomError(ErrorCode.VALIDATION_ERROR, `無効なスライドタイプです: ${slideData.type}`)
+    }
+  } catch (error) {
+    throw new CustomError(ErrorCode.SLIDE_GENERATION_ERROR, "スライドの生成に失敗しました", {
+      slideType: slideData.type,
+      originalError: error,
+    })
   }
 }
 
 async function generateTitleSlide(slide: any, content: any) {
+  if (!content.title) {
+    throw new CustomError(ErrorCode.VALIDATION_ERROR, "タイトルスライドにはtitleが必要です")
+  }
+
   // BCGスタイルのタイトルスライド
-  slide.addText(content.title || "タイトル", {
+  slide.addText(content.title, {
     x: 1,
     y: 2.5,
     w: 8,
@@ -95,8 +128,12 @@ async function generateTitleSlide(slide: any, content: any) {
 }
 
 async function generateChartSlide(slide: any, content: any, tags: string[]) {
+  if (!content.title) {
+    throw new CustomError(ErrorCode.VALIDATION_ERROR, "チャートスライドにはtitleが必要です")
+  }
+
   // タイトル
-  slide.addText(content.title || "チャート", {
+  slide.addText(content.title, {
     x: 0.5,
     y: 0.5,
     w: 9,
@@ -108,37 +145,39 @@ async function generateChartSlide(slide: any, content: any, tags: string[]) {
   })
 
   // チャートデータの処理
-  if (content.data && content.data.datasets) {
-    const chartType = content.chart_type || content.chartType || "bar"
-    const chartData = processChartData(content.data)
+  if (!content.data || !content.data.datasets) {
+    throw new CustomError(ErrorCode.INVALID_CHART_DATA, "チャートデータが無効です")
+  }
 
-    try {
-      slide.addChart(chartType, chartData, {
-        x: 1,
-        y: 1.5,
-        w: 8,
-        h: 4.5,
-        showTitle: false,
-        showLegend: true,
-        legendPos: "b",
-        chartColors: ["3B82F6", "10B981", "F59E0B", "EF4444", "8B5CF6"],
-      })
-    } catch (error) {
-      console.error("Error generating chart:", error)
-      // エラー時のフォールバック
-      slide.addText("チャートの生成に失敗しました", {
-        x: 1,
-        y: 3,
-        w: 8,
-        h: 2,
-        fontSize: 18,
-        fontFace: "Arial",
-        color: "6B7280",
-        align: "center",
-        valign: "middle",
-        fill: "F3F4F6",
-      })
-    }
+  const chartType = content.chart_type || content.chartType || "bar"
+  const chartData = processChartData(content.data)
+
+  try {
+    slide.addChart(chartType, chartData, {
+      x: 1,
+      y: 1.5,
+      w: 8,
+      h: 4.5,
+      showTitle: false,
+      showLegend: true,
+      legendPos: "b",
+      chartColors: ["3B82F6", "10B981", "F59E0B", "EF4444", "8B5CF6"],
+    })
+  } catch (error) {
+    console.error("Error generating chart:", error)
+    // エラー時のフォールバック
+    slide.addText("チャートの生成に失敗しました", {
+      x: 1,
+      y: 3,
+      w: 8,
+      h: 2,
+      fontSize: 18,
+      fontFace: "Arial",
+      color: "6B7280",
+      align: "center",
+      valign: "middle",
+      fill: "F3F4F6",
+    })
   }
 
   // データソース注記
@@ -155,25 +194,37 @@ async function generateChartSlide(slide: any, content: any, tags: string[]) {
 }
 
 function processChartData(data: any): any[] {
+  if (!data.labels || !Array.isArray(data.labels)) {
+    throw new CustomError(ErrorCode.INVALID_CHART_DATA, "チャートのラベルが無効です")
+  }
+
+  if (!data.datasets || !Array.isArray(data.datasets)) {
+    throw new CustomError(ErrorCode.INVALID_CHART_DATA, "チャートのデータセットが無効です")
+  }
+
   const result = []
 
-  if (data.labels && data.datasets) {
-    // ヘッダー行の追加
-    const header = ["Category"]
-    data.datasets.forEach((dataset: any) => {
-      header.push(dataset.label || `Series ${header.length}`)
-    })
-    result.push(header)
+  // ヘッダー行の追加
+  const header = ["Category"]
+  data.datasets.forEach((dataset: any) => {
+    if (!dataset.label) {
+      throw new CustomError(ErrorCode.INVALID_CHART_DATA, "データセットのラベルが無効です")
+    }
+    header.push(dataset.label)
+  })
+  result.push(header)
 
-    // データ行の追加
-    data.labels.forEach((label: string, index: number) => {
-      const row = [label]
-      data.datasets.forEach((dataset: any) => {
-        row.push(dataset.data[index] || 0)
-      })
-      result.push(row)
+  // データ行の追加
+  data.labels.forEach((label: string, index: number) => {
+    const row = [label]
+    data.datasets.forEach((dataset: any) => {
+      if (!Array.isArray(dataset.data)) {
+        throw new CustomError(ErrorCode.INVALID_CHART_DATA, "データセットのデータが無効です")
+      }
+      row.push(dataset.data[index] || 0)
     })
-  }
+    result.push(row)
+  })
 
   return result
 }

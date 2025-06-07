@@ -12,6 +12,9 @@ export enum ErrorCode {
   VALIDATION_ERROR = "VALIDATION_ERROR",
   INVALID_INPUT = "INVALID_INPUT",
   MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD",
+  INVALID_YAML = "INVALID_YAML",
+  INVALID_CHART_DATA = "INVALID_CHART_DATA",
+  INVALID_TEMPLATE = "INVALID_TEMPLATE",
 
   // API エラー
   API_ERROR = "API_ERROR",
@@ -30,6 +33,11 @@ export enum ErrorCode {
   INVALID_FILE_TYPE = "INVALID_FILE_TYPE",
   PDF_PROCESSING_ERROR = "PDF_PROCESSING_ERROR",
 
+  // ファイル操作エラー
+  FILE_READ_ERROR = "FILE_READ_ERROR",
+  FILE_WRITE_ERROR = "FILE_WRITE_ERROR",
+  FILE_DELETE_ERROR = "FILE_DELETE_ERROR",
+
   // データベースエラー
   DATABASE_ERROR = "DATABASE_ERROR",
   RECORD_NOT_FOUND = "RECORD_NOT_FOUND",
@@ -39,10 +47,15 @@ export enum ErrorCode {
   POWERPOINT_GENERATION_ERROR = "POWERPOINT_GENERATION_ERROR",
   TEMPLATE_ERROR = "TEMPLATE_ERROR",
   CHART_GENERATION_ERROR = "CHART_GENERATION_ERROR",
+  SLIDE_GENERATION_ERROR = "SLIDE_GENERATION_ERROR",
 
   // 一般的なエラー
   UNKNOWN_ERROR = "UNKNOWN_ERROR",
   INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR",
+
+  // システムエラー
+  INTERNAL_ERROR = "INTERNAL_ERROR",
+  EXTERNAL_SERVICE_ERROR = "EXTERNAL_SERVICE_ERROR",
 }
 
 export interface AppError {
@@ -70,6 +83,10 @@ export class CustomError extends Error {
     this.timestamp = new Date()
     this.userId = userId
     this.requestId = requestId
+  }
+
+  static isCustomError(error: any): error is CustomError {
+    return error instanceof CustomError
   }
 
   toJSON(): AppError {
@@ -178,6 +195,9 @@ export class ErrorHandler {
 
       [ErrorCode.UNKNOWN_ERROR]: "予期しないエラーが発生しました。",
       [ErrorCode.INTERNAL_SERVER_ERROR]: "サーバー内部エラーが発生しました。",
+
+      [ErrorCode.INTERNAL_ERROR]: "予期せぬエラーが発生しました。",
+      [ErrorCode.EXTERNAL_SERVICE_ERROR]: "外部サービスでエラーが発生しました。",
     }
 
     return messages[code] || messages[ErrorCode.UNKNOWN_ERROR]
@@ -352,4 +372,38 @@ export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, 
   }
 
   throw lastError!
+}
+
+export function handleError(error: unknown): CustomError {
+  if (CustomError.isCustomError(error)) {
+    return error
+  }
+
+  if (error instanceof Error) {
+    // YAMLパースエラーの処理
+    if (error.message.includes("yaml")) {
+      return new CustomError(ErrorCode.INVALID_YAML, "YAMLデータの解析に失敗しました", {
+        originalError: error.message,
+      })
+    }
+
+    // PowerPoint生成エラーの処理
+    if (error.message.includes("PowerPoint")) {
+      return new CustomError(ErrorCode.POWERPOINT_GENERATION_ERROR, "PowerPointの生成に失敗しました", {
+        originalError: error.message,
+      })
+    }
+
+    // チャート生成エラーの処理
+    if (error.message.includes("chart")) {
+      return new CustomError(ErrorCode.CHART_GENERATION_ERROR, "チャートの生成に失敗しました", {
+        originalError: error.message,
+      })
+    }
+  }
+
+  // その他のエラー
+  return new CustomError(ErrorCode.INTERNAL_ERROR, "予期せぬエラーが発生しました", {
+    originalError: error,
+  })
 }
