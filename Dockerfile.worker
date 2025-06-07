@@ -1,0 +1,27 @@
+# Node.jsビルドステージ
+FROM node:20-alpine AS node-builder
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install
+COPY . .
+RUN pnpm build
+
+# Pythonビルドステージ
+FROM python:3.11-slim
+WORKDIR /app
+
+# 必要なパッケージをインストール
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python依存関係をインストール
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Node.jsアプリケーションをコピー
+COPY --from=node-builder /app/dist ./dist
+COPY --from=node-builder /app/node_modules ./node_modules
+
+# ワーカープロセスを起動
+CMD ["node", "dist/worker.js"] 

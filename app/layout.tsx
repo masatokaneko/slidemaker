@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { EnhancedErrorBoundary } from "@/components/enhanced-error-boundary"
 import { ErrorProvider } from "@/contexts/error-context"
+import { Analytics } from '@vercel/analytics/react'
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             </AuthProvider>
           </ErrorProvider>
         </EnhancedErrorBoundary>
+        <Analytics />
       </body>
     </html>
   )
